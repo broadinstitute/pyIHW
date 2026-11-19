@@ -16,7 +16,7 @@
 
 import marimo
 
-__generated_with = "0.23.14"
+__generated_with = "0.25.2"
 app = marimo.App(width="medium")
 
 
@@ -53,9 +53,9 @@ def _(mo):
     When we run thousands of tests, the **Benjamini–Hochberg (BH)** procedure
     controls the false discovery rate (FDR) by treating every hypothesis the
     same. Often, though, we know something about each test *before* looking at
-    its p-value: how deeply a gene is sequenced, how many cells carry a gRNA,
-    or the analytical **power** of a CRISPR-screen pair. Tests with high power
-    are more likely to be discoveries.
+    its p-value, such as the number of observations used in the test. IHW
+    uses that extra information to prioritize tests that are more likely to
+    yield discoveries.
 
     **IHW** uses such a covariate to give each test a weight $w_i$, with
     weights averaging 1, and runs BH on the weighted p-values $p_i / w_i$.
@@ -74,8 +74,8 @@ def _(mo):
     mo.md(r"""
     ## 1. Simulate tests with a known truth
 
-    Each test has a covariate $x \in [0, 1]$ (think: power). A test is a true
-    signal with probability $0.4\,x^3$, so almost all signals sit at high $x$.
+    Each test has a covariate $x \in [0, 1]$. A test is a true
+    signal with probability $0.4\,x^3$, so signals are more common at high $x$.
     Signals get a z-score shift equal to the effect size. Null p-values are
     uniform whatever $x$ is, so the covariate is valid.
     """)
@@ -141,7 +141,7 @@ def _(mo):
     1. **Stratify** the tests into `nbins` equal-sized bins of the covariate.
     2. **Split** them into `nfolds` folds. The weights for one fold are learned
        *only* from the other folds (cross-fitting), so a test's weight never
-       depends on its own p-value. This is what preserves FDR control.
+       depends on its own p-value.
     3. In each bin, estimate the p-value distribution with the **Grenander
        estimator**, a concave CDF fit. Then solve a **linear program** for
        the per-bin thresholds that maximize expected discoveries at level
@@ -187,8 +187,8 @@ def _(alpha, false_discovery_control, is_signal, mo, np, pd, pvalues, result):
         mo.ui.table(comparison.round(3), selection=None),
         mo.md(
             "Because this is a simulation, we know which tests are true signals. "
-            "Both methods keep the **false discovery proportion** near or below α, "
-            "and IHW usually finds **more true signals**."
+            "FDP is the fraction of this run’s rejections that are false. "
+            "FDR is the expected FDP across runs, so a single run can exceed α."
         ),
     ])
     return
@@ -196,33 +196,155 @@ def _(alpha, false_discovery_control, is_signal, mo, np, pd, pvalues, result):
 
 @app.cell
 def _(mo):
-    mo.md(r"""
-    ## 3. Quality-control plots
+    mo.md("""
+    ## 3. Explore the quality-control plots
 
-    `pyihw.qc_report(result)` draws a six-panel summary. Read it as follows:
-
-    * **All p-values / density by stratum**: the right half of each histogram
-      should be flat. That is the null part. A slope there, especially one that
-      differs between strata, suggests the covariate may not be independent of
-      null p-values.
-    * **Signal by stratum**: Storey's null-proportion estimate $\hat\pi_0$ per
-      bin, with the fraction of tests rejected. An informative covariate makes
-      them move in opposite directions.
-    * **Learned weights**: one line per fold. Folds should broadly agree. Wild
-      disagreement means there are too few tests per bin, so reduce `nbins`.
-    * **Decision boundary**: each fold's rejection threshold on the
-      $-\log_{10} p$ scale, against the covariate value (use
-      `result.plot("decisionboundary", x_axis="ranks")` for ranks). Points
-      above the line are rejected.
-    * **Rejections vs level**: IHW versus unweighted BH across $\alpha$. The
-      weights were learned at the chosen α, so the curve is exact only there.
+    Choose a panel to see how to read it and what to try. The display controls
+    below do not refit IHW; the simulation and fit controls above do.
+    To see all six together in your own analysis, call `pyihw.qc_report(result)`.
     """)
     return
 
 
 @app.cell
-def _(pyihw, result):
-    pyihw.qc_report(result)
+def _(mo):
+    qc_panel = mo.ui.dropdown(
+        ["All p-values", "Density by stratum", "Signal by stratum",
+         "Learned weights", "Decision boundary", "Rejections vs level"],
+        value="All p-values",
+        label="QC panel",
+    )
+    qc_panel
+    return (qc_panel,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    hist_bins = mo.ui.slider(10, 50, step=10, value=20, label="Histogram bins", show_value=True)
+    boundary_axis = mo.ui.radio(
+        {"Covariate values": "covariate", "Covariate ranks": "ranks"},
+        value="Covariate values",
+        label="Horizontal axis",
+        inline=True,
+    )
+    preview_level = mo.ui.slider(
+        0.01, 0.30, step=0.01, value=0.10, label="Preview level (fixed weights)", show_value=True,
+    )
+    return boundary_axis, hist_bins, preview_level
+
+
+@app.cell(hide_code=True)
+def _(boundary_axis, hist_bins, preview_level, qc_panel):
+    {
+        "All p-values": hist_bins,
+        "Density by stratum": hist_bins,
+        "Decision boundary": boundary_axis,
+        "Rejections vs level": preview_level,
+    }.get(qc_panel.value)
+    return
+
+
+@app.cell(hide_code=True)
+def _(
+    boundary_axis,
+    false_discovery_control,
+    hist_bins,
+    mo,
+    np,
+    plt,
+    preview_level,
+    pvalues,
+    pyihw,
+    qc_panel,
+    result,
+):
+    from pyihw import (
+        plot_pvalue_densities,
+        plot_pvalue_histogram,
+        plot_stratum_summary,
+    )
+
+    _fig, _ax = plt.subplots(figsize=(7, 4))
+    _panel = qc_panel.value
+
+    if _panel == "All p-values":
+        plot_pvalue_histogram(result, bins=hist_bins.value, ax=_ax)
+        _guide = r"""
+        **Read it:** The bars show the density of p-values pooled across tests.
+        A spike near zero can reflect real signal. The dashed line is Storey's
+        estimate of the uniform-null contribution, $\hat\pi_0$.
+
+        **Try it:** Change the histogram resolution. Do bumps persist with wider
+        bins? A flat pooled tail can hide differences between strata; check the
+        next panel.
+        """
+    elif _panel == "Density by stratum":
+        plot_pvalue_densities(result, bins=hist_bins.value, ax=_ax)
+        _guide = """
+        **Read it:** Each line is a covariate stratum. Compare tail shapes, not
+        heights: strata with different proportions of true nulls can have flat
+        tails at different heights. Systematic slopes or bumps are worth checking,
+        but flat tails do not prove the covariate is valid. The vertical scale can
+        clip the spike near zero to make the tails easier to compare.
+
+        **Try it:** Increase *Covariate bins* or decrease *Number of tests* above.
+        With fewer observations per stratum, the lines tend to get noisier.
+        """
+    elif _panel == "Signal by stratum":
+        plot_stratum_summary(result, ax=_ax)
+        _guide = r"""
+        **Read it:** Gray bars estimate the fraction of true nulls ($\hat\pi_0$);
+        red points show the fraction of tests rejected, not their false discovery
+        proportion. In this simulation, higher strata tend to have fewer true
+        nulls and more rejections.
+
+        **Try it:** Lower the effect size. The simulated signal labels stay the
+        same, but weaker signals can be harder to separate from nulls. The bars
+        are estimates, not the known truth.
+        """
+    elif _panel == "Learned weights":
+        pyihw.plot_weights(result, ax=_ax)
+        _guide = """
+        **Read it:** Each line shows the weights applied to one held-out fold.
+        A weight above 1 reduces the weighted p-value; below 1 it increases it.
+        Large differences between fold lines can indicate unstable estimates.
+
+        **Try it:** Reduce *Covariate bins* above and compare how closely the fold
+        lines agree. With one stratum, all weights are 1 and IHW reduces to BH.
+        """
+    elif _panel == "Decision boundary":
+        pyihw.plot_decision_boundary(result, x_axis=boundary_axis.value, ax=_ax)
+        _guide = r"""
+        **Read it:** Each dot is a test; smaller p-values sit higher on the
+        $-\log_{10}(p)$ scale. Red dots are rejections. Compare a test only to its
+        own fold's threshold. A lower line lets that fold reject larger raw
+        p-values in that stratum.
+
+        **Try it:** Toggle values and ranks; the same tests are rejected. Then
+        change *FDR level* above to refit IHW and see the thresholds move.
+        """
+    else:
+        _level = preview_level.value
+        _grid = np.linspace(0.005, max(0.30, 2 * result.alpha), 60)
+        _levels = np.unique(np.r_[_grid, _level, result.alpha])
+        pyihw.plot_rejections(result, alphas=_levels, ax=_ax)
+        _ihw_count = int(np.sum(result.adj_pvalues() <= _level))
+        _bh_count = int(np.sum(false_discovery_control(pvalues, method="bh") <= _level))
+        _ax.scatter([_level, _level], [_ihw_count, _bh_count], color=["C3", "0.4"], zorder=3)
+        _guide = f"""
+        **Read it:** Each curve counts rejections as the cutoff on adjusted
+        p-values increases. The dotted line marks where IHW learned its weights
+        ({result.alpha:g}). Away from that line, the curve reuses those weights;
+        it does not show what a refit would discover.
+
+        **Try it:** Move the preview slider. At {_level:g}, there are
+        **{_ihw_count:,} IHW** and **{_bh_count:,} BH** rejections. Use *FDR level*
+        above to refit rather than preview.
+        """
+
+    _fig.tight_layout()
+    plt.close(_fig)
+    mo.vstack([mo.md(_guide), _fig])
     return
 
 
@@ -247,25 +369,13 @@ def _(mo, np, pd, result):
 
 
 @app.cell
-def _(mo, pyihw, result):
-    mo.vstack([
-        mo.md(
-            "Per-stratum p-value histograms. The dashed line is $\\hat\\pi_0$. "
-            "The spike at 0 grows with the covariate."
-        ),
-        pyihw.plot_pvalue_histograms(result),
-    ])
-    return
-
-
-@app.cell
 def _(mo):
-    mo.md(r"""
+    mo.md("""
     ## 4. What if the covariate carries no information?
 
-    Replace the covariate with random noise. IHW should then learn weights
-    close to 1 and behave like BH. It loses a little power to noise but does
-    not inflate false discoveries.
+    Refit with an independent random covariate while keeping the same p-values.
+    There should be no systematic pattern in the weights and no reliable gain
+    in discoveries over BH. A single simulation can still show differences.
     """)
     return
 
@@ -282,28 +392,6 @@ def _(alpha, false_discovery_control, nbins, np, plt, pvalues, pyihw):
     )
     _fig.tight_layout()
     _fig
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""
-    ## 5. Using it on a pysceptre screen
-
-    For a CRISPR screen, analytical power from `pysceptre.compute_power` is a
-    natural covariate:
-
-    ```python
-    from pyihw import ihw_with_power, qc_report
-
-    weighted = ihw_with_power(discovery, power, alpha=0.1, nbins=10)
-    weighted["ihw_rejected"]                  # discoveries
-    qc_report(weighted.attrs["ihw_result"])   # the same QC plots as above
-    ```
-
-    See `docs/pysceptre.md` for the full pipeline, including the null check on
-    calibration pairs.
-    """)
     return
 
 

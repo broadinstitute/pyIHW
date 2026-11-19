@@ -41,6 +41,12 @@
 
 ::: pyihw.qc_report
 
+::: pyihw.plot_pvalue_histogram
+
+::: pyihw.plot_pvalue_densities
+
+::: pyihw.plot_stratum_summary
+
 ::: pyihw.plot_weights
 
 ::: pyihw.plot_decision_boundary

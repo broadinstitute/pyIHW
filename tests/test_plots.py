@@ -2,7 +2,15 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from pyihw import ihw, plot_decision_boundary, plot_pvalue_histograms, qc_report
+from pyihw import (
+    ihw,
+    plot_decision_boundary,
+    plot_pvalue_densities,
+    plot_pvalue_histogram,
+    plot_pvalue_histograms,
+    plot_stratum_summary,
+    qc_report,
+)
 
 matplotlib = pytest.importorskip("matplotlib")
 matplotlib.use("Agg")
@@ -17,12 +25,33 @@ def result():
     return ihw(pvalues, covariate, alpha=0.1, nbins=6)
 
 
-def test_qc_report_draws_every_panel(result):
-    fig = qc_report(result)
+@pytest.mark.parametrize("bins", [1, 20])
+def test_qc_report_draws_every_panel(result, bins):
+    fig = qc_report(result, bins=bins)
 
     titles = [ax.get_title() for ax in fig.axes]
-    for expected in ("All p-values", "Learned weights", "Decision boundary", "Rejections vs level"):
-        assert expected in titles
+    assert titles[:6] == [
+        "All p-values",
+        "p-value density by stratum",
+        "Signal by stratum",
+        "Learned weights",
+        "Decision boundary",
+        "Rejections vs level",
+    ]
+
+
+@pytest.mark.parametrize(
+    "plot", [plot_pvalue_histogram, plot_pvalue_densities, plot_stratum_summary]
+)
+def test_standalone_qc_plots_draw_on_supplied_axis(result, plot):
+    from matplotlib import pyplot as plt
+
+    fig, ax = plt.subplots()
+    try:
+        assert plot(result, ax=ax) is ax
+        assert ax.has_data()
+    finally:
+        plt.close(fig)
 
 
 def test_qc_report_skips_decision_boundary_for_nominal_covariates():

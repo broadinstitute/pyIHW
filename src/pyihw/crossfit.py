@@ -11,10 +11,13 @@ from .optimization import fit_weights
 
 
 def assign_folds(count: int, nfolds: int, rng: np.random.Generator) -> np.ndarray:
-    """Independent uniform fold draws, as R's ``sample(1:nfolds, m, replace=TRUE)``."""
+    """Draw folds as in R, using a shuffled balanced split if a fold is empty."""
     if nfolds == 1:
         return np.zeros(count, dtype=int)
-    return rng.integers(0, nfolds, size=count)
+    folds = rng.integers(0, nfolds, size=count)
+    if np.any(np.bincount(folds, minlength=nfolds) == 0):
+        return rng.permutation(count) % nfolds
+    return folds
 
 
 def holdout_counts(

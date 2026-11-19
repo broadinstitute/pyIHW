@@ -65,14 +65,23 @@ def stratify(
     """Stratify the covariates of the tested hypotheses.
 
     ``original`` is the user's covariate object, consulted only for the
-    category order of a pandas ``Categorical``.
+    category order of a pandas ``Categorical`` or categorical ``Series``.
     """
+    if isinstance(getattr(original, "dtype", None), pd.CategoricalDtype):
+        categories = pd.Index(original.dtype.categories)
+        categories = categories[categories.isin(covariate)]
+        return _categorical_strata(covariate, list(categories), covariate_type, nbins)
     is_numeric = np.issubdtype(covariate.dtype, np.number)
     if covariate_type == "ordinal" and is_numeric:
         return _numeric_strata(covariate, nbins, seed, has_m_groups)
     if is_numeric:
         raise ValueError("nominal covariates must be categorical")
-    return _categorical_strata(covariate, original, covariate_type, nbins)
+    categories = list(pd.unique(covariate))
+    try:
+        categories = sorted(categories)
+    except TypeError:
+        pass
+    return _categorical_strata(covariate, categories, covariate_type, nbins)
 
 
 def _numeric_strata(
@@ -93,16 +102,8 @@ def _numeric_strata(
 
 
 def _categorical_strata(
-    covariate: np.ndarray, original: Any, covariate_type: str, nbins: int | str
+    covariate: np.ndarray, categories: list, covariate_type: str, nbins: int | str
 ) -> Strata:
-    if isinstance(original, pd.Series) and isinstance(original.dtype, pd.CategoricalDtype):
-        categories = [c for c in original.cat.categories if np.any(covariate == c)]
-    else:
-        categories = list(pd.unique(pd.Series(covariate)))
-        try:
-            categories = sorted(categories)
-        except TypeError:
-            pass
     if not categories:
         raise ValueError("at least one covariate stratum is required")
     if nbins != "auto" and int(nbins) != len(categories):

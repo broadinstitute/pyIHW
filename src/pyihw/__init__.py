@@ -18,8 +18,11 @@ from .fitting import ihw
 from .multiple_testing import get_bh_threshold
 from .plots import (
     plot_decision_boundary,
+    plot_pvalue_densities,
+    plot_pvalue_histogram,
     plot_pvalue_histograms,
     plot_rejections,
+    plot_stratum_summary,
     plot_weights,
     qc_report,
 )
@@ -37,8 +40,11 @@ __all__ = [
     "ihw_formula",
     "ihw_with_power",
     "plot_decision_boundary",
+    "plot_pvalue_densities",
+    "plot_pvalue_histogram",
     "plot_pvalue_histograms",
     "plot_rejections",
+    "plot_stratum_summary",
     "plot_weights",
     "qc_report",
 ]

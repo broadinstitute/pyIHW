@@ -197,7 +197,7 @@ def plot_pvalue_densities(result: IHWResult, *, bins: int = 20, ax: Any = None) 
         if not len(p):
             continue
         density, _ = np.histogram(p, bins=edges, density=True)
-        tail_max = max(tail_max, density[edges[:-1] >= STOREY_LEVEL].max())
+        tail_max = max(tail_max, density[edges[1:] > STOREY_LEVEL].max())
         colour = cmap(g / max(result.nbins - 1, 1))
         ax.stairs(density, edges, baseline=None, color=colour, linewidth=1.2)
     ax.set_ylim(0, 2 * tail_max)

@@ -56,6 +56,10 @@ The main result accessors are `adj_pvalues`, `weights`, `thresholds`,
 
 The implementation supports the core `ihw` options, regularization selection,
 pre-specified folds, and incomplete p-value lists with `m_groups`.
+Supply non-negative integer counts. For a two-dimensional `m_groups`,
+columns follow sorted explicit fold labels, including labeled folds with
+no observed p-values. If a fold has no observed training p-values outside
+it, its learned weights are uniform.
 `IHWResult.stratification_breaks()` returns the maximum covariate value in
 each ordinal stratum, and `IHWResult.stratum_sizes()` returns the number of
 observed p-values per stratum. The decision
@@ -65,14 +69,19 @@ boundary plot uses covariate values on its x-axis by default; pass
 ## Toy example notebook
 
 [`examples/ihw_toy_example.py`](examples/ihw_toy_example.py) is a marimo
-notebook. It simulates tests with a known truth, compares BH with IHW, walks
-through the QC plots, and checks that an uninformative covariate does no harm.
+notebook. It simulates tests with a known truth, compares BH with IHW, and
+walks through each QC plot with interactive controls.
 [Try it in the browser](https://broadinstitute.github.io/pyIHW/app/) (it runs
-locally in WebAssembly, so nothing needs to be installed), or run it locally:
+locally in WebAssembly, so nothing needs to be installed), or run it locally
+with [Pixi](https://pixi.sh/):
 
 ```bash
-uvx marimo edit --sandbox examples/ihw_toy_example.py
+pixi run notebook
 ```
+
+The repository's locked Pixi environment installs this package in editable
+mode and provides `pixi run test` and `pixi run lint`. It does not require
+pysceptre or its environment.
 
 ## QC plots
 

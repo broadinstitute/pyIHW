@@ -135,15 +135,19 @@ def _add_uniform_deviation(
     regularization: float,
 ) -> int:
     """``sum_g |m t_g - sum_h m_h t_h| <= lambda * sum(m_g t_g)`` for unordered strata."""
-    total_held = float(np.sum(held_counts))
-    deviations = start + np.arange(len(t))
-    for idx, deviation in enumerate(deviations):
-        coeffs = -held_counts.astype(float)
-        coeffs[idx] += total_held
-        for sign in (1.0, -1.0):
-            constraints.add(np.append(t, deviation), np.append(sign * coeffs, -1.0))
+    total_held = float(held_counts.sum())
+    weighted_sum = start
+    deviations = start + 1 + np.arange(len(t))
+    # Define the weighted sum once instead of repeating it in each deviation.
+    cols = np.append(t, weighted_sum)
+    coeffs = np.append(held_counts, -1.0)
+    constraints.add(cols, coeffs)
+    constraints.add(cols, -coeffs)
+    for threshold, deviation in zip(t, deviations):
+        constraints.add([threshold, weighted_sum, deviation], [total_held, -1.0, -1.0])
+        constraints.add([threshold, weighted_sum, deviation], [-total_held, 1.0, -1.0])
     constraints.add(
-        np.concatenate([deviations, t]),
-        np.concatenate([np.ones(len(deviations)), -regularization * held_counts]),
+        np.append(deviations, weighted_sum),
+        np.append(np.ones(len(deviations)), -regularization),
     )
-    return start + len(deviations)
+    return start + 1 + len(deviations)

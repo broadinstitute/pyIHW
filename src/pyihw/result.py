@@ -11,7 +11,7 @@ import pandas as pd
 from .multiple_testing import get_bh_threshold
 
 
-@dataclass
+@dataclass(eq=False)
 class IHWResult:
     """Fitted IHW weights and multiple-testing results.
 
@@ -41,11 +41,11 @@ class IHWResult:
 
     def thresholds(self, levels_only: bool = False) -> np.ndarray:
         """Raw p-value cutoffs: hypothesis ``i`` is rejected iff ``p_i <= threshold_i``."""
-        weighted = self._frame["weighted_pvalue"].to_numpy()
-        valid = ~np.isnan(weighted)
-        threshold = get_bh_threshold(
-            weighted[valid], self.alpha, int(np.sum(self.m_groups))
-        )
+        mtests = int(np.sum(self.m_groups))
+        if self.adjustment_type == "bonferroni":
+            threshold = self.alpha / mtests
+        else:
+            threshold = get_bh_threshold(self.weighted_pvalues(), self.alpha, mtests)
         level_thresholds = threshold * self._weight_matrix
         if levels_only:
             return level_thresholds

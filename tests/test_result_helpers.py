@@ -2,7 +2,25 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from pyihw import ihw
+from pyihw import ihw, ihw_deseq_results
+
+
+@pytest.mark.parametrize(("method", "cutoff"), [("BH", 0.04), ("bonferroni", 0.1 / 3)])
+def test_thresholds_agree_with_rejection_flags(method, cutoff):
+    result = ihw([0.03, 0.04, 0.9], [1, 1, 1], 0.1, adjustment_type=method)
+
+    np.testing.assert_allclose(result.thresholds(levels_only=True), [[cutoff]])
+    np.testing.assert_array_equal(
+        result.pvalues() <= result.thresholds(), result.rejected_hypotheses()
+    )
+
+
+def test_independently_fitted_adapter_outputs_can_be_concatenated():
+    data = pd.DataFrame({"pvalue": [0.03, 0.5], "baseMean": [2, 3]})
+
+    combined = pd.concat([ihw_deseq_results(data), ihw_deseq_results(data)])
+
+    np.testing.assert_allclose(combined["padj"], [0.06, 0.5, 0.06, 0.5])
 
 
 def test_stratification_breaks_and_sizes_exclude_missing_pvalues():

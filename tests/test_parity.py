@@ -129,6 +129,81 @@ def test_null_proportion_with_random_folds():
     assert np.all(np.isfinite(result.weights()))
 
 
+@pytest.mark.parametrize("null_proportion", [False, True])
+def test_small_fit_has_no_empty_random_folds(null_proportion):
+    result = ihw(
+        [0.001, 0.7], [1, 2], alpha=0.1, nbins=2, seed=1,
+        null_proportion=null_proportion,
+    )
+
+    assert result.nfolds == 2
+    assert result.to_dataframe()["fold"].nunique() == 2
+    assert np.isfinite(result.adj_pvalues()).all()
+
+
+@pytest.mark.parametrize("counts", [[1.8, 2.8], [[1, -1], [1, 1]], [[1, 0.5], [0, 1]]])
+def test_population_counts_must_be_nonnegative_integers(counts):
+    with pytest.raises(ValueError, match="non-negative integers"):
+        ihw([0.03, 0.04], ["a", "b"], alpha=0.1, folds=[1, 2], m_groups=counts)
+
+
+def test_fold_count_columns_follow_sorted_labels_including_untested_folds():
+    pvalues = np.array([0.04, 0.001, 0.9, np.nan])
+    covariates = np.array(["a", "b", "b", "a"])
+    folds = np.array([20, 20, 10, 30])
+    counts = [[0, 1, 3], [1, 1, 0]]
+    order = np.array([2, 0, 3, 1])
+
+    result = ihw(pvalues, covariates, 0.1, folds=folds, m_groups=counts, lambdas=[0.5])
+    reordered = ihw(
+        pvalues[order], covariates[order], 0.1, folds=folds[order],
+        m_groups=counts, lambdas=[0.5],
+    )
+    np.testing.assert_array_equal(result.m_groups, [4, 2])
+    assert result.to_dataframe()["fold"].iloc[:3].tolist() == [2, 2, 1]
+    np.testing.assert_allclose(result.adj_pvalues()[order], reordered.adj_pvalues())
+
+
+def test_counted_fold_with_no_observed_tests_is_not_used_for_training():
+    with pytest.warns(UserWarning, match="No observed training p-values"):
+        result = ihw(
+            [0.03, 0.04, np.nan], ["a", "b", "a"], 0.1,
+            folds=[1, 1, 2], m_groups=[[1, 2], [1, 0]],
+            adjustment_type="bonferroni",
+        )
+
+    np.testing.assert_allclose(result.weights(), [1, 1, np.nan])
+    np.testing.assert_allclose(result.adj_pvalues(), [0.12, 0.16, np.nan])
+
+
+@pytest.mark.parametrize("as_series", [False, True])
+def test_nominal_numeric_categories_preserve_declared_order(as_series):
+    covariates = pd.Categorical([1, 2, 1, 2], categories=[2, 1], ordered=True)
+    if as_series:
+        covariates = pd.Series(covariates)
+    result = ihw(
+        [0.01, 0.04, 0.5, 0.9], covariates, 0.1,
+        covariate_type="nominal", folds=[1, 1, 2, 2], m_groups=[3, 2], lambdas=[0],
+    )
+
+    np.testing.assert_allclose(result.adj_pvalues(), [0.05, 0.1, 5 / 6, 1])
+
+
+@pytest.mark.parametrize("as_series", [False, True])
+def test_ordered_categorical_keeps_non_alphabetical_order(as_series):
+    covariates = pd.Categorical(
+        ["high", "low", "mid"], categories=["low", "mid", "high"], ordered=True,
+    )
+    if as_series:
+        covariates = pd.Series(covariates)
+    result = ihw(
+        [0.01, 0.04, 0.9], covariates, 0.1, folds=[1, 2, 1],
+        m_groups=[1, 1, 2], lambdas=[0],
+    )
+
+    np.testing.assert_allclose(result.adj_pvalues(), [0.04, 0.08, 1])
+
+
 def test_tiny_pvalues_do_not_break_the_linear_program():
     pvalues, covariates = _example_data()
     pvalues[[120, 121]] = [1e-30, 1e-25]

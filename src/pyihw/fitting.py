@@ -48,9 +48,11 @@ def ihw(
         nbins: number of strata for numeric covariates; ``"auto"`` uses about
             1,500 hypotheses per stratum, at most 40.
         m_groups: total hypotheses per stratum, including untested ones, for
-            categorical covariates. Two-dimensional ``(nbins, nfolds)`` counts
-            require explicit ``folds``.
-        folds: explicit fold labels; otherwise ``nfolds`` random folds.
+            categorical covariates. Counts must be non-negative integers.
+            Two-dimensional counts require one column per explicit fold label,
+            in sorted order, including folds with only missing p-values.
+        folds: explicit fold labels; otherwise up to ``nfolds`` nonempty random
+            folds (at most one per observed p-value).
         nfolds_internal: folds of the nested cross-fitting that picks the
             regularization strength from ``lambdas``.
         nsplits_internal: how many times that nested split is repeated.
@@ -68,8 +70,12 @@ def ihw(
         raise ValueError("at least one non-missing p-value is required")
     if pd.isna(cov_all[valid]).any():
         raise ValueError("covariates for non-missing p-values cannot be missing")
-    if folds is not None and len(folds) != len(p_all):
-        raise ValueError("folds must match the p-value vector")
+    if folds is not None:
+        folds = np.asarray(folds, dtype=object)
+        if folds.shape != p_all.shape:
+            raise ValueError("folds must match the p-value vector")
+        if pd.isna(folds[valid]).any():
+            raise ValueError("folds for non-missing p-values cannot be missing")
     p = p_all[valid]
     rng = np.random.default_rng(seed)
 
@@ -78,13 +84,12 @@ def ihw(
     )
     groups, n_bins = strata.codes, strata.count
     available = np.bincount(groups, minlength=n_bins).astype(float)
-    m_groups_arr = _check_m_groups(m_groups, available, n_bins, folds)
+    m_groups_arr = _check_m_groups(m_groups, available)
     if n_bins == 1:
         nfolds = 1
 
-    fold_values = None if folds is None else np.asarray(folds)[valid]
     fold_ids, n_folds, population, population_by_fold = _resolve_folds(
-        fold_values, groups, n_bins, available, m_groups_arr, int(nfolds), rng
+        folds, valid, groups, available, m_groups_arr, int(nfolds), rng
     )
     if np.any(population <= 0):
         raise ValueError("each stratum must represent a positive number of tests")
@@ -171,50 +176,56 @@ def _check_options(covariate_type, adjustment_type, nfolds, nfolds_internal, nsp
             raise ValueError(f"{name} must be a positive integer")
 
 
-def _check_m_groups(m_groups, available: np.ndarray, n_bins: int, folds) -> np.ndarray:
+def _check_m_groups(m_groups, available: np.ndarray) -> np.ndarray:
     if m_groups is None:
         return available.copy()
     counts = np.asarray(m_groups, dtype=float)
-    if counts.ndim == 2:
-        if folds is None:
-            raise ValueError("a two-dimensional m_groups requires pre-specified folds")
-        if counts.shape != (n_bins, len(np.unique(folds))):
-            raise ValueError("m_groups dimensions must be (nbins, number of folds)")
-    elif counts.ndim != 1 or len(counts) != n_bins:
+    if counts.ndim not in (1, 2) or len(counts) != len(available):
         raise ValueError("m_groups must have one count per stratum")
-    if not np.all(np.isfinite(counts)):
-        raise ValueError("m_groups must be finite")
+    if not np.all(np.isfinite(counts)) or np.any((counts < 0) | (counts != np.floor(counts))):
+        raise ValueError("m_groups must contain finite non-negative integers")
     if counts.ndim == 1 and np.any(counts < available):
         raise ValueError("m_groups cannot be smaller than the observed stratum counts")
     return counts
 
 
 def _resolve_folds(
-    fold_values: np.ndarray | None,
+    folds: np.ndarray | None,
+    valid: np.ndarray,
     groups: np.ndarray,
-    n_bins: int,
     available: np.ndarray,
     m_groups: np.ndarray,
     nfolds: int,
     rng: np.random.Generator,
 ) -> tuple[np.ndarray, int, np.ndarray, np.ndarray | None]:
     """Fold ids, fold count, stratum population and, with explicit folds, its split by fold."""
-    if fold_values is None:
+    if folds is None:
+        if m_groups.ndim == 2:
+            raise ValueError("a two-dimensional m_groups requires pre-specified folds")
+        nfolds = min(nfolds, len(groups))
         return assign_folds(len(groups), nfolds, rng), nfolds, m_groups, None
 
-    labels = list(pd.unique(fold_values))
+    fold_values = folds[valid]
+    if m_groups.ndim == 2:
+        try:
+            labels = sorted(pd.unique(folds[~pd.isna(folds)]))
+        except TypeError as exc:
+            raise ValueError("two-dimensional m_groups requires sortable fold labels") from exc
+        if m_groups.shape[1] != len(labels):
+            raise ValueError("m_groups dimensions must be (nbins, number of folds)")
+    else:
+        labels = pd.unique(fold_values)
     lookup = {value: idx for idx, value in enumerate(labels)}
     fold_ids = np.asarray([lookup[value] for value in fold_values], dtype=int)
     n_folds = len(labels)
-    observed = np.zeros((n_bins, n_folds), dtype=float)
+    observed = np.zeros((len(available), n_folds), dtype=float)
     np.add.at(observed, (groups, fold_ids), 1)
     if m_groups.ndim == 2:
         if np.any(m_groups < observed):
             raise ValueError("m_groups cannot be smaller than observed group/fold counts")
-        by_fold = m_groups
-    else:
-        by_fold = observed + (m_groups[:, None] - available[:, None]) / n_folds
-    return fold_ids, n_folds, np.sum(by_fold, axis=1), by_fold
+        return fold_ids, n_folds, m_groups.sum(axis=1), m_groups
+    by_fold = observed + (m_groups[:, None] - available[:, None]) / n_folds
+    return fold_ids, n_folds, m_groups, by_fold
 
 
 def _fit_fold_weights(
@@ -237,9 +248,15 @@ def _fit_fold_weights(
     """Learn each fold's weights from the other folds only."""
     weight_matrix = np.ones((n_bins, n_folds))
     fold_lambdas = np.zeros(n_folds)
-    for fold in range(n_folds):
+    for fold in np.unique(fold_ids):
         training = fold_ids != fold if n_folds > 1 else np.ones(len(p), dtype=bool)
         training_p, training_groups = p[training], groups[training]
+        if not len(training_p):
+            warnings.warn(
+                "No observed training p-values outside the fold; using uniform weights.",
+                UserWarning,
+            )
+            continue
         if n_folds == 1:
             held_counts = population.copy()
             training_counts = population.copy()
@@ -282,7 +299,7 @@ def _rescale_by_null_proportion(
     """Divide each fold's weights, in place, by its weighted Storey null proportion."""
     if not 0 < level < 1:
         raise ValueError("null_proportion_level must be strictly between 0 and 1")
-    for fold in range(n_folds):
+    for fold in np.unique(fold_ids):
         selected = fold_ids == fold
         fold_total = (
             population_by_fold[:, fold].sum()
