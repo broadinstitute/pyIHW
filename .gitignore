@@ -1,0 +1,11 @@
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.venv/
+build/
+dist/
+site/
+examples/__marimo__/
+# written by examples/pysceptre_ihw.py; the docs use copies in docs/images/
+examples/*.png

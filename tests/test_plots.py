@@ -1,0 +1,53 @@
+import numpy as np
+import pandas as pd
+import pytest
+
+from pyihw import ihw, plot_decision_boundary, plot_pvalue_histograms, qc_report
+
+matplotlib = pytest.importorskip("matplotlib")
+matplotlib.use("Agg")
+
+
+@pytest.fixture
+def result():
+    rng = np.random.default_rng(0)
+    covariate = rng.uniform(0, 4, 3000)
+    pvalues = np.where(rng.random(3000) < 0.1, rng.uniform(0, 1e-3, 3000), rng.random(3000))
+    pvalues[:5] = np.nan
+    return ihw(pvalues, covariate, alpha=0.1, nbins=6)
+
+
+def test_qc_report_draws_every_panel(result):
+    fig = qc_report(result)
+
+    titles = [ax.get_title() for ax in fig.axes]
+    for expected in ("All p-values", "Learned weights", "Decision boundary", "Rejections vs level"):
+        assert expected in titles
+
+
+def test_qc_report_skips_decision_boundary_for_nominal_covariates():
+    rng = np.random.default_rng(1)
+    covariate = pd.Categorical(rng.choice(list("abc"), 900))
+    result = ihw(rng.random(900), covariate, alpha=0.1, covariate_type="nominal")
+
+    fig = qc_report(result)
+
+    assert "Decision boundary" not in [ax.get_title() for ax in fig.axes]
+
+
+def test_pvalue_histograms_has_one_panel_per_stratum(result):
+    fig = plot_pvalue_histograms(result, ncols=4)
+
+    assert sum(ax.get_visible() for ax in fig.axes) == result.nbins
+
+
+def test_decision_boundary_defaults_to_covariate_values(result):
+    ax = plot_decision_boundary(result)
+
+    assert ax.get_xlabel() == "Covariate"
+
+
+def test_result_decision_boundary_defaults_to_covariate_values(result):
+    ax = result.plot("decisionboundary")
+
+    assert ax.get_xlabel() == "Covariate"
