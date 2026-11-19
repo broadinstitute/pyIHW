@@ -40,22 +40,37 @@ class IHWResult:
         return self._frame["weight"].to_numpy(copy=True)
 
     def thresholds(self, levels_only: bool = False) -> np.ndarray:
-        """Raw p-value cutoffs: hypothesis ``i`` is rejected iff ``p_i <= threshold_i``."""
+        """Raw p-value cutoffs that reproduce the fitted tests' rejection flags.
+
+        Cutoffs account for floating-point rounding at observed p-values.
+        """
         mtests = int(np.sum(self.m_groups))
         if self.adjustment_type == "bonferroni":
             threshold = self.alpha / mtests
         else:
             threshold = get_bh_threshold(self.weighted_pvalues(), self.alpha, mtests)
         level_thresholds = threshold * self._weight_matrix
-        if levels_only:
-            return level_thresholds
         groups = self._frame["group_code"].to_numpy(dtype=float)
         folds = self._frame["fold_code"].to_numpy(dtype=float)
-        result = np.full(len(self._frame), np.nan)
         coded = ~np.isnan(groups) & ~np.isnan(folds)
-        result[coded] = level_thresholds[
-            groups[coded].astype(int), folds[coded].astype(int)
-        ]
+        indices = groups[coded].astype(int), folds[coded].astype(int)
+        pvalues = self.pvalues()[coded]
+        rejected = self.adj_pvalues()[coded] <= self.alpha
+        cutoffs = level_thresholds[indices]
+        # Inverting the adjustment can round differently from computing it.
+        too_low = rejected & (pvalues > cutoffs)
+        too_high = ~rejected & (pvalues <= cutoffs)
+        np.maximum.at(
+            level_thresholds, (indices[0][too_low], indices[1][too_low]), pvalues[too_low],
+        )
+        np.minimum.at(
+            level_thresholds, (indices[0][too_high], indices[1][too_high]),
+            np.nextafter(pvalues[too_high], 0),
+        )
+        if levels_only:
+            return level_thresholds
+        result = np.full(len(self._frame), np.nan)
+        result[coded] = level_thresholds[indices]
         return result
 
     def pvalues(self) -> np.ndarray:

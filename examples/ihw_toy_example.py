@@ -16,7 +16,7 @@
 
 import marimo
 
-__generated_with = "0.25.2"
+__generated_with = "0.25.1"
 app = marimo.App(width="medium")
 
 
@@ -247,13 +247,11 @@ def _(boundary_axis, hist_bins, preview_level, qc_panel):
 @app.cell(hide_code=True)
 def _(
     boundary_axis,
-    false_discovery_control,
     hist_bins,
     mo,
     np,
     plt,
     preview_level,
-    pvalues,
     pyihw,
     qc_panel,
     result,
@@ -328,8 +326,13 @@ def _(
         _grid = np.linspace(0.005, max(0.30, 2 * result.alpha), 60)
         _levels = np.unique(np.r_[_grid, _level, result.alpha])
         pyihw.plot_rejections(result, alphas=_levels, ax=_ax)
-        _ihw_count = int(np.sum(result.adj_pvalues() <= _level))
-        _bh_count = int(np.sum(false_discovery_control(pvalues, method="bh") <= _level))
+        _index = np.searchsorted(_levels, _level)
+        _counts = {
+            line.get_label(): int(line.get_ydata()[_index])
+            for line in _ax.get_lines()
+            if line.get_label() in {"IHW", "BH"}
+        }
+        _ihw_count, _bh_count = _counts["IHW"], _counts["BH"]
         _ax.scatter([_level, _level], [_ihw_count, _bh_count], color=["C3", "0.4"], zorder=3)
         _guide = f"""
         **Read it:** Each curve counts rejections as the cutoff on adjusted

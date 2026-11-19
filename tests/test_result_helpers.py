@@ -23,6 +23,32 @@ def test_independently_fitted_adapter_outputs_can_be_concatenated():
     np.testing.assert_allclose(combined["padj"], [0.06, 0.5, 0.06, 0.5])
 
 
+@pytest.mark.parametrize(
+    ("method", "alpha", "ntests", "pvalue"),
+    [
+        pytest.param("BH", 0.03, 7, 0.03 / 7, id="bh-lower"),
+        pytest.param("bonferroni", 0.03, 7, 0.03 / 7, id="bonferroni-lower"),
+        pytest.param(
+            "bonferroni", 0.001, 3, np.nextafter(0.001 / 3, 1), id="bonferroni-raise"
+        ),
+    ],
+)
+def test_cutoffs_match_adjusted_values_at_rounding_boundary(method, alpha, ntests, pvalue):
+    result = ihw(
+        [pvalue] + [0.9] * (ntests - 1),
+        [1] * ntests,
+        alpha,
+        adjustment_type=method,
+    )
+
+    flags = result.rejected_hypotheses()
+    np.testing.assert_array_equal(flags, result.adj_pvalues() <= alpha)
+    np.testing.assert_array_equal(result.pvalues() <= result.thresholds(), flags)
+    np.testing.assert_array_equal(
+        result.pvalues() <= result.thresholds(levels_only=True)[0, 0], flags
+    )
+
+
 def test_stratification_breaks_and_sizes_exclude_missing_pvalues():
     result = ihw(
         [0.01, 0.4, 0.6, 0.8, np.nan],
