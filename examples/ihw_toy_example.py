@@ -6,11 +6,11 @@
 #     "numpy",
 #     "pandas",
 #     "scipy",
-#     "pyihw",
+#     "ihw-py",
 # ]
 #
 # [tool.uv.sources]
-# pyihw = { path = "..", editable = true }
+# ihw-py = { path = "..", editable = true }
 # ///
 # ruff: noqa: PLR1711, B018  (marimo cells end in bare returns and display expressions)
 
@@ -26,7 +26,7 @@ async def _():
 
     import marimo as mo
 
-    # In the browser (Pyodide), install the pyihw wheel served next to this page.
+    # In the browser (Pyodide), install the ihw-py wheel served next to this page.
     if sys.platform == "emscripten":
         import micropip
         from pyodide.http import pyfetch

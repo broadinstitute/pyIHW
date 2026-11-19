@@ -22,7 +22,7 @@ def _pyplot():
     try:
         import matplotlib.pyplot as plt
     except ImportError as exc:
-        raise ImportError("Install pyihw with the 'plot' extra to draw plots.") from exc
+        raise ImportError("Install ihw-py with the 'plot' extra to draw plots.") from exc
     return plt
 
 

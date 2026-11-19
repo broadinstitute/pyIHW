@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pyihw"
+name = "ihw-py"
 version = "0.1.0"
 description = "Independent hypothesis weighting for multiple testing"
 readme = "README.md"

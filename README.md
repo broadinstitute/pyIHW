@@ -14,17 +14,18 @@ control.
 
 ## Install
 
-pyihw is not on PyPI yet. Install it from GitHub:
+The distribution is named `ihw-py`; import it as `pyihw`. Until it is
+published to PyPI, install it from GitHub:
 
 ```bash
-python -m pip install "pyihw[plot] @ git+https://github.com/broadinstitute/pyIHW"
+python -m pip install "ihw-py[plot] @ git+https://github.com/broadinstitute/pyIHW"
 ```
 
 Drop `[plot]` if you do not need the QC plots (matplotlib).
 
 > [!WARNING]
-> `pip install pyihw` from PyPI installs an **unrelated** project that happens
-> to use the same name. Use the GitHub URL above.
+> `pip install pyihw` from PyPI installs an **unrelated** project. Use the
+> `ihw-py` GitHub URL above.
 
 ## Example
 

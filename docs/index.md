@@ -12,12 +12,13 @@ applies weighted Benjamini–Hochberg (FDR) or Bonferroni (FWER) adjustment.
 ## Install
 
 ```bash
-python -m pip install "pyihw[plot] @ git+https://github.com/broadinstitute/pyIHW"
+python -m pip install "ihw-py[plot] @ git+https://github.com/broadinstitute/pyIHW"
 ```
 
 !!! note
-    `pip install pyihw` from PyPI installs an unrelated project with the same
-    name. Install from the GitHub URL above.
+    The distribution is named `ihw-py`, but the import package is `pyihw`.
+    `pip install pyihw` from PyPI installs an unrelated project. Install from
+    the GitHub URL above.
 
 ## Quick start
 

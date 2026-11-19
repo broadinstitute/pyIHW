@@ -8,13 +8,13 @@ rm -rf site build_wasm
 mkdir -p build_wasm
 
 uv build --wheel -o build_wasm
-wheel=$(basename build_wasm/pyihw-*.whl)
+wheel=$(basename build_wasm/ihw_py-*.whl)
 
 uvx --with mkdocstrings-python zensical build --clean
 
-# The browser installs pyihw from the wheel served next to the app, so drop the
+# The browser installs ihw-py from the wheel served next to the app, so drop the
 # local-path dependency (and uv source) from the notebook's inline metadata.
-grep -v -e '^#     "pyihw",$' -e '^# \[tool.uv.sources\]$' -e '^# pyihw = ' \
+grep -v -e '^#     "ihw-py",$' -e '^# \[tool.uv.sources\]$' -e '^# ihw-py = ' \
     examples/ihw_toy_example.py > build_wasm/ihw_toy_example.py
 
 uvx marimo export html-wasm --mode run --no-show-code \
