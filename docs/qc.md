@@ -1,6 +1,6 @@
 # QC plots
 
-All plots require Matplotlib (`pip install 'pyihw[plot]'`). Each function takes
+All plots require Matplotlib (the `plot` extra, see [Install](index.md#install)). Each function takes
 an `IHWResult`. Single-axis plots accept `ax=` and return the axis; multi-panel
 plots return a figure.
 

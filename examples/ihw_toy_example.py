@@ -21,8 +21,20 @@ app = marimo.App(width="medium")
 
 
 @app.cell
-def _():
+async def _():
+    import sys
+
     import marimo as mo
+
+    # In the browser (Pyodide), install the pyihw wheel served next to this page.
+    if sys.platform == "emscripten":
+        import micropip
+        from pyodide.http import pyfetch
+
+        base = str(mo.notebook_location()).rstrip("/")
+        wheel = (await (await pyfetch(f"{base}/wheel.txt")).string()).strip()
+        await micropip.install(f"{base}/{wheel}")
+
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd

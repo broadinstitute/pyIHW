@@ -9,17 +9,22 @@ The covariate must be independent of the p-value under the null hypothesis.
 Choosing a covariate that violates this assumption can invalidate error-rate
 control.
 
+**Documentation:** <https://broadinstitute.github.io/pyIHW/> ·
+**Interactive notebook (runs in your browser):** <https://broadinstitute.github.io/pyIHW/app/>
+
 ## Install
 
-```bash
-python -m pip install .
-```
-
-For diagnostic plots:
+pyihw is not on PyPI yet. Install it from GitHub:
 
 ```bash
-python -m pip install '.[plot]'
+python -m pip install "pyihw[plot] @ git+https://github.com/broadinstitute/pyIHW"
 ```
+
+Drop `[plot]` if you do not need the QC plots (matplotlib).
+
+> [!WARNING]
+> `pip install pyihw` from PyPI installs an **unrelated** project that happens
+> to use the same name. Use the GitHub URL above.
 
 ## Example
 
@@ -60,7 +65,9 @@ boundary plot uses covariate values on its x-axis by default; pass
 
 [`examples/ihw_toy_example.py`](examples/ihw_toy_example.py) is a marimo
 notebook. It simulates tests with a known truth, compares BH with IHW, walks
-through the QC plots, and checks that an uninformative covariate does no harm:
+through the QC plots, and checks that an uninformative covariate does no harm.
+[Try it in the browser](https://broadinstitute.github.io/pyIHW/app/) (it runs
+locally in WebAssembly, so nothing needs to be installed), or run it locally:
 
 ```bash
 uvx marimo edit --sandbox examples/ihw_toy_example.py
@@ -126,6 +133,21 @@ As in R, p-values at or below a tiny threshold are set to 0 before the
 Grenander fit. R uses 1e-20; pyihw uses `1e-14` because SciPy's HiGHS solver
 rejects the larger slopes that smaller p-values produce. These p-values are
 rejected either way.
+
+## Building the docs
+
+The site uses [Zensical](https://zensical.org) (the successor to Material for
+MkDocs) with mkdocstrings for the API reference. The toy notebook is exported
+to WebAssembly with marimo and served under `/app/`. With
+[uv](https://docs.astral.sh/uv/) installed:
+
+```bash
+scripts/build_site.sh                       # writes site/
+python -m http.server 8000 --directory site # preview at http://localhost:8000
+```
+
+Pushing to `main` rebuilds and deploys the site to GitHub Pages
+(`.github/workflows/docs.yml`).
 
 ## Attribution
 

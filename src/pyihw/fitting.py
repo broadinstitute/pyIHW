@@ -51,8 +51,9 @@ def ihw(
             categorical covariates. Two-dimensional ``(nbins, nfolds)`` counts
             require explicit ``folds``.
         folds: explicit fold labels; otherwise ``nfolds`` random folds.
-        nfolds_internal, nsplits_internal: nested cross-fitting used to pick
-            the regularization strength from ``lambdas``.
+        nfolds_internal: folds of the nested cross-fitting that picks the
+            regularization strength from ``lambdas``.
+        nsplits_internal: how many times that nested split is repeated.
         seed: seeds stratum tie-breaking and fold assignment.
         null_proportion: rescale weights by a weighted Storey estimate of the
             null proportion at ``null_proportion_level``.

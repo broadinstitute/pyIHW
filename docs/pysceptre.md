@@ -8,7 +8,7 @@ to up-weight pairs that can plausibly be discoveries, while keeping FDR
 control.
 
 A complete runnable version of this page is in
-[`examples/pysceptre_ihw.py`](../examples/pysceptre_ihw.py).
+[`examples/pysceptre_ihw.py`](https://github.com/broadinstitute/pyIHW/blob/main/examples/pysceptre_ihw.py).
 
 ## Workflow
 
